@@ -59,12 +59,73 @@ def on_message(client, userdata, msg):
     """
     global ended
     print("message: " + msg.topic + " " + str(msg.qos) + " " + str(msg.payload))
+    if msg.topic == f"games/{lobby_name}/{player_name}/game_state":
+        game_state = json.loads(msg.payload.decode())
+        print_map(
+            game_state["currentPosition"],
+            game_state["teammatePositions"],
+            game_state["teammateNames"],
+            game_state["enemyPositions"],
+            game_state["coin1"],
+            game_state["coin2"],
+            game_state["coin3"],
+            game_state["walls"],
+        )
     if "Error" in msg.payload.decode():
         ended = True
         exit(1)
     if "Game Over" in msg.payload.decode():
         ended = True
         exit(0)
+
+
+def print_map(
+    curr_pos: list[int],
+    teammate_pos: list[list[int]],
+    teammate_names: list[str],
+    enemy_pos: list[list[int]],
+    coin1: list[list[int]],
+    coin2: list[list[int]],
+    coin3: list[list[int]],
+    walls: list[list[int]],
+):
+    visible_map = [[None for i in range(5)] for j in range(5)]
+    visible_map[2][2] = player_name
+    for i in range(len(teammate_pos)):
+        visible_map[4 - (curr_pos[0] - teammate_pos[i][0] + 2)][
+            teammate_pos[i][1] - curr_pos[1] + 2
+        ] = teammate_names[i]
+    for i in range(len(enemy_pos)):
+        visible_map[4 - (curr_pos[0] - enemy_pos[i][0] + 2)][
+            enemy_pos[i][1] - curr_pos[1] + 2
+        ] = "Enemy"
+    for i in range(len(coin1)):
+        visible_map[4 - (curr_pos[0] - coin1[i][0] + 2)][
+            coin1[i][1] - curr_pos[1] + 2
+        ] = "Coin1"
+    for i in range(len(coin2)):
+        visible_map[4 - (curr_pos[0] - coin2[i][0] + 2)][
+            coin2[i][1] - curr_pos[1] + 2
+        ] = "Coin2"
+    for i in range(len(coin3)):
+        visible_map[4 - (curr_pos[0] - coin3[i][0] + 2)][
+            coin3[i][1] - curr_pos[1] + 2
+        ] = "Coin3"
+    for i in range(len(walls)):
+        visible_map[4 - (curr_pos[0] - walls[i][0] + 2)][
+            walls[i][1] - curr_pos[1] + 2
+        ] = "Wall"
+
+    output = []
+    for row in visible_map:
+        row_str = []
+        for cell in row:
+            if cell is None:
+                cell = "None"
+            row_str.append(cell)
+        output.append("\t".join(row_str))
+    output = "\n".join(output)
+    print(output)
 
 
 if __name__ == "__main__":
@@ -100,7 +161,7 @@ if __name__ == "__main__":
     )
 
     client.subscribe(f"games/{lobby_name}/lobby")
-    client.subscribe(f"games/{lobby_name}/+/game_state")
+    client.subscribe(f"games/{lobby_name}/{player_name}/game_state")
     client.subscribe(f"games/{lobby_name}/scores")
 
     client.publish(
@@ -124,7 +185,7 @@ if __name__ == "__main__":
     while True:
         if ended:
             break
-        key_event = read_event(suppress=True)
+        key_event = read_event()
         if key_event.event_type == "up":
             continue
         match key_event.name:
