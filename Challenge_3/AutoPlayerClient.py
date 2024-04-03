@@ -203,7 +203,10 @@ class PlayerMap:
                     for move, dir in moves:
                         if dir != best_direction:
                             continue
-                        next_coords = [curr_node[0] + move[0], curr_node[1] + move[1]]
+                        next_coords = [
+                            self.current_position[0] + move[0],
+                            self.current_position[1] + move[1],
+                        ]
                         break
             elif curr_node not in self.seen_coords:
                 score = path_len + 200
@@ -213,7 +216,10 @@ class PlayerMap:
                     for move, dir in moves:
                         if dir != best_direction:
                             continue
-                        next_coords = [curr_node[0] + move[0], curr_node[1] + move[1]]
+                        next_coords = [
+                            self.current_position[0] + move[0],
+                            self.current_position[1] + move[1],
+                        ]
                         break
             visited.append(curr_node)
         return best_direction, next_coords
@@ -325,6 +331,7 @@ class AutoPlayerClient:
                     "player_name": self.player_name,
                 }
             ),
+            qos=1,
         )
         time.sleep(1)  # Wait a second to resolve game start
 
@@ -341,24 +348,21 @@ class AutoPlayerClient:
             self.move(direction, next_coords)
         topic_list = msg.topic.split("/")
         if topic_list[-1] == "position":
-            self.map.update_teammates(
-                topic_list[3], json.loads(msg.payload.decode())["teammate"]
-            )
+            self.map.update_teammates(topic_list[3], json.loads(msg.payload.decode()))
 
     def move(self, move: str, coords: list[int]):
         self.client.publish(
             f"games/{self.lobby_name}/{self.team_name}/{self.player_name}/position",
-            str(json.loads('{"teammate": ' + str(coords) + "}")),
+            str(coords),
+            qos=1,
         )
         self.client.publish(
-            f"games/{self.lobby_name}/{self.player_name}/move",
-            move,
+            f"games/{self.lobby_name}/{self.player_name}/move", move, qos=1
         )
 
 
 if __name__ == "__main__":
     player_client = AutoPlayerClient()
-    # player_client.client.publish(f"games/{player_client.lobby_name}/start", "START")
     player_client.client.loop_start()
     while True:
         key_event = read_event()
