@@ -146,6 +146,56 @@ class PlayerMap:
         for coin in self.coin3:
             self.map[coin[0]][coin[1]] = 3
 
+    def next_move(self):
+        # perform bfs on the entire known map
+        moves = [
+            ([0, -1], "LEFT"),
+            ([0, 1], "RIGHT"),
+            ([-1, 0], "UP"),
+            ([1, 0], "DOWN"),
+        ]
+        queue = []
+        visited = []
+        best_score = 9999
+        best_direction = choice(["UP", "DOWN", "LEFT", "RIGHT"])
+        curr_node = self.current_position
+        for move, direction in moves:
+            neighbor = [curr_node[0] + move[0], curr_node[1] + move[1]]
+            if neighbor in visited:
+                continue
+            if neighbor[0] < 0 or neighbor[0] == self.rows:
+                continue
+            if neighbor[1] < 0 or neighbor[1] == self.columns:
+                continue
+            if self.map[neighbor[0]][neighbor[1]] == -1:
+                continue
+            queue.append((neighbor, direction, 1))
+        while len(queue) > 0:
+            curr_node, direction, path_len = queue.pop(0)
+            for move, _ in moves:
+                neighbor = [curr_node[0] + move[0], curr_node[1] + move[1]]
+                if neighbor in visited:
+                    continue
+                if neighbor[0] < 0 or neighbor[0] == self.rows:
+                    continue
+                if neighbor[1] < 0 or neighbor[1] == self.columns:
+                    continue
+                if self.map[neighbor[0]][neighbor[1]] == -1:
+                    continue
+                queue.append((neighbor, direction, path_len + 1))
+            if self.map[curr_node[0]][curr_node[1]] > 0:
+                score = path_len / self.map[curr_node[0]][curr_node[1]]
+                if score < best_score:
+                    best_score = score
+                    best_direction = direction
+            elif curr_node not in self.seen_coords:
+                score = path_len + 200
+                if score < best_score:
+                    best_score = score
+                    best_direction = direction
+            visited.append(curr_node)
+        return best_direction
+
 
 def eucliedan_distance(a: list[int], b: list[int]):
     return sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2)
@@ -240,7 +290,6 @@ class AutoPlayerClient:
         self.client.subscribe(f"games/{self.lobby_name}/{self.player_name}/game_state")
         self.client.subscribe(f"games/{self.lobby_name}/scores")
 
-        self.ended = False
         self.map = PlayerMap(self.player_name, 10, 10)
         self.curr_score: int = 0
 
@@ -258,16 +307,14 @@ class AutoPlayerClient:
 
     def handle_message(self, msg):
         if "Error" in msg.payload.decode():
-            ended = True
             exit(1)
         if "Game Over" in msg.payload.decode():
-            ended = True
             exit(0)
         if msg.topic == f"games/{self.lobby_name}/{self.player_name}/game_state":
             game_state = json.loads(msg.payload.decode())
             self.map.load_visible_map(game_state)
             self.map.print_map()
-            self.next_move()
+            self.move(self.map.next_move())
 
     def move(self, move: str):
         self.client.publish(
@@ -275,60 +322,10 @@ class AutoPlayerClient:
             move,
         )
 
-    def next_move(self):
-        # perform bfs on the entire known map
-        moves = [
-            ([0, -1], "LEFT"),
-            ([0, 1], "RIGHT"),
-            ([-1, 0], "UP"),
-            ([1, 0], "DOWN"),
-        ]
-        queue = []
-        visited = []
-        best_score = 9999
-        best_direction = choice(["UP", "DOWN", "LEFT", "RIGHT"])
-        curr_node = self.map.current_position
-        for move, direction in moves:
-            neighbor = [curr_node[0] + move[0], curr_node[1] + move[1]]
-            if neighbor in visited:
-                continue
-            if neighbor[0] < 0 or neighbor[0] == self.map.rows:
-                continue
-            if neighbor[1] < 0 or neighbor[1] == self.map.columns:
-                continue
-            if self.map.map[neighbor[0]][neighbor[1]] == -1:
-                continue
-            queue.append((neighbor, direction, 1))
-        while len(queue) > 0:
-            curr_node, direction, path_len = queue.pop(0)
-            for move, _ in moves:
-                neighbor = [curr_node[0] + move[0], curr_node[1] + move[1]]
-                if neighbor in visited:
-                    continue
-                if neighbor[0] < 0 or neighbor[0] == self.map.rows:
-                    continue
-                if neighbor[1] < 0 or neighbor[1] == self.map.columns:
-                    continue
-                if self.map.map[neighbor[0]][neighbor[1]] == -1:
-                    continue
-                queue.append((neighbor, direction, path_len + 1))
-            if self.map.map[curr_node[0]][curr_node[1]] > 0:
-                score = path_len / self.map.map[curr_node[0]][curr_node[1]]
-                if score < best_score:
-                    best_score = score
-                    best_direction = direction
-            elif curr_node not in self.map.seen_coords:
-                score = path_len + 200
-                if score < best_score:
-                    best_score = score
-                    best_direction = direction
-            visited.append(curr_node)
-        self.move(best_direction)
-
 
 if __name__ == "__main__":
     player_client = AutoPlayerClient()
-    player_client.client.publish(f"games/{player_client.lobby_name}/start", "START")
+    # player_client.client.publish(f"games/{player_client.lobby_name}/start", "START")
     player_client.client.loop_start()
     while True:
         key_event = read_event()
@@ -359,5 +356,9 @@ if __name__ == "__main__":
                 player_client.client.publish(
                     f"games/{player_client.lobby_name}/{player_client.player_name}/move",
                     "RIGHT",
+                )
+            case "enter":
+                player_client.client.publish(
+                    f"games/{player_client.lobby_name}/start", "START"
                 )
     player_client.client.loop_stop()
