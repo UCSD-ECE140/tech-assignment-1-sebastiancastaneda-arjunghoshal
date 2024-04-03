@@ -12,7 +12,8 @@ from math import sqrt
 
 
 class PlayerMap:
-    def __init__(self, player_name: str, rows: int, columns: int) -> None:
+    def __init__(self, observer, player_name: str, rows: int, columns: int) -> None:
+        self.observer = observer
         self.player_name: str = player_name
         self.rows = rows
         self.columns = columns
@@ -68,27 +69,68 @@ class PlayerMap:
         output = "\n".join(output)
         print(output)
 
-    def remove_collected_coins(self):
+    def remove_collected_coins(self, game_state: dict):
         if self.current_position in self.coin1:
             self.coin1.remove(self.current_position)
+            self.observer.publish_collected1(self.current_position)
         if self.current_position in self.coin2:
             self.coin2.remove(self.current_position)
+            self.observer.publish_collected2(self.current_position)
         if self.current_position in self.coin3:
             self.coin3.remove(self.current_position)
-        for teammate in self.teammates:
-            if teammate in self.coin1:
-                self.coin1.remove(teammate)
-            if teammate in self.coin2:
-                self.coin2.remove(teammate)
-            if teammate in self.coin3:
-                self.coin3.remove(teammate)
+            self.observer.publish_collected3(self.current_position)
         for enemy in self.enemies:
             if enemy in self.coin1:
                 self.coin1.remove(enemy)
+                self.observer.publish_collected1(enemy)
             if enemy in self.coin2:
                 self.coin2.remove(enemy)
+                self.observer.publish_collected2(enemy)
             if enemy in self.coin3:
                 self.coin3.remove(enemy)
+                self.observer.publish_collected3(enemy)
+        for coin in self.coin1:
+            if (
+                coin[0] < self.current_position[0] - 2
+                or coin[0] > self.current_position[0] + 2
+            ):
+                continue
+            if (
+                coin[1] < self.current_position[1] - 2
+                or coin[1] > self.current_position[1] + 2
+            ):
+                continue
+            if coin not in game_state["coin1"]:
+                self.coin1.remove(coin)
+                self.observer.publish_collected1(coin)
+        for coin in self.coin2:
+            if (
+                coin[0] < self.current_position[0] - 2
+                or coin[0] > self.current_position[0] + 2
+            ):
+                continue
+            if (
+                coin[1] < self.current_position[1] - 2
+                or coin[1] > self.current_position[1] + 2
+            ):
+                continue
+            if coin not in game_state["coin2"]:
+                self.coin2.remove(coin)
+                self.observer.publish_collected2(coin)
+        for coin in self.coin3:
+            if (
+                coin[0] < self.current_position[0] - 2
+                or coin[0] > self.current_position[0] + 2
+            ):
+                continue
+            if (
+                coin[1] < self.current_position[1] - 2
+                or coin[1] > self.current_position[1] + 2
+            ):
+                continue
+            if coin not in game_state["coin3"]:
+                self.coin3.remove(coin)
+                self.observer.publish_collected3(coin)
 
     def update_seen_coords(self):
         for i in range(-2, 3):
@@ -118,10 +160,8 @@ class PlayerMap:
     def load_visible_map(self, game_state: dict):
         self.current_position = game_state["currentPosition"]
         # TODO: change to get from topic
-        self.teammates = game_state["teammatePositions"]
-        self.teammate_names = game_state["teammateNames"]
         self.enemies = game_state["enemyPositions"]
-        self.remove_collected_coins()
+        self.remove_collected_coins(game_state)
         self.update_seen_coords()
         for coin in game_state["coin1"]:
             if coin in self.coin1:
@@ -318,8 +358,11 @@ class AutoPlayerClient:
         self.client.subscribe(f"games/{self.lobby_name}/{self.player_name}/game_state")
         self.client.subscribe(f"games/{self.lobby_name}/scores")
         self.client.subscribe(f"games/{self.lobby_name}/{self.team_name}/+/position")
+        self.client.subscribe(f"games/{self.lobby_name}/{self.team_name}/+/collected1")
+        self.client.subscribe(f"games/{self.lobby_name}/{self.team_name}/+/collected2")
+        self.client.subscribe(f"games/{self.lobby_name}/{self.team_name}/+/collected3")
 
-        self.map = PlayerMap(self.player_name, 10, 10)
+        self.map = PlayerMap(self, self.player_name, 10, 10)
         self.curr_score: int = 0
 
         self.client.publish(
@@ -335,6 +378,21 @@ class AutoPlayerClient:
         )
         time.sleep(1)  # Wait a second to resolve game start
 
+    def publish_collected1(self, coin: list[int]):
+        self.client.publish(
+            f"games/{self.lobby_name}/{self.team_name}/+/collected1", str(coin), qos=1
+        )
+
+    def publish_collected2(self, coin: list[int]):
+        self.client.publish(
+            f"games/{self.lobby_name}/{self.team_name}/+/collected2", str(coin), qos=1
+        )
+
+    def publish_collected3(self, coin: list[int]):
+        self.client.publish(
+            f"games/{self.lobby_name}/{self.team_name}/+/collected3", str(coin), qos=1
+        )
+
     def handle_message(self, msg):
         if "Error" in msg.payload.decode():
             exit(1)
@@ -348,7 +406,19 @@ class AutoPlayerClient:
             self.move(direction, next_coords)
         topic_list = msg.topic.split("/")
         if topic_list[-1] == "position":
-            self.map.update_teammates(topic_list[3], json.loads(msg.payload.decode()))
+            if topic_list[3] != self.player_name:
+                self.map.update_teammates(
+                    topic_list[3], json.loads(msg.payload.decode())
+                )
+        if topic_list[-1] == "collected1":
+            if topic_list[3] != self.player_name:
+                self.map.coin1.remove(json.loads(msg.payload.decode()))
+        if topic_list[-1] == "collected2":
+            if topic_list[3] != self.player_name:
+                self.map.coin2.remove(json.loads(msg.payload.decode()))
+        if topic_list[-1] == "collected3":
+            if topic_list[3] != self.player_name:
+                self.map.coin3.remove(json.loads(msg.payload.decode()))
 
     def move(self, move: str, coords: list[int]):
         self.client.publish(
