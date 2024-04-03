@@ -380,17 +380,23 @@ class AutoPlayerClient:
 
     def publish_collected1(self, coin: list[int]):
         self.client.publish(
-            f"games/{self.lobby_name}/{self.team_name}/+/collected1", str(coin), qos=1
+            f"games/{self.lobby_name}/{self.team_name}/{self.player_name}/collected1",
+            str(coin),
+            qos=1,
         )
 
     def publish_collected2(self, coin: list[int]):
         self.client.publish(
-            f"games/{self.lobby_name}/{self.team_name}/+/collected2", str(coin), qos=1
+            f"games/{self.lobby_name}/{self.team_name}/{self.player_name}/collected2",
+            str(coin),
+            qos=1,
         )
 
     def publish_collected3(self, coin: list[int]):
         self.client.publish(
-            f"games/{self.lobby_name}/{self.team_name}/+/collected3", str(coin), qos=1
+            f"games/{self.lobby_name}/{self.team_name}/{self.player_name}/collected3",
+            str(coin),
+            qos=1,
         )
 
     def handle_message(self, msg):
