@@ -525,7 +525,7 @@ if __name__ == "__main__":
                     f"games/{player_client.lobby_name}/{player_client.player_name}/move",
                     "RIGHT",
                 )
-            case "enter":
+            case "s":
                 player_client.client.publish(
                     f"games/{player_client.lobby_name}/start", "START"
                 )
