@@ -341,12 +341,14 @@ class AutoPlayerClient:
             self.move(direction, next_coords)
         topic_list = msg.topic.split("/")
         if topic_list[-1] == "position":
-            self.map.update_teammates(topic_list[3], msg.payload.decode())
+            self.map.update_teammates(
+                topic_list[3], json.loads(msg.payload.decode())["teammate"]
+            )
 
     def move(self, move: str, coords: list[int]):
         self.client.publish(
             f"games/{self.lobby_name}/{self.team_name}/{self.player_name}/position",
-            coords,
+            str(json.loads("{teammate: " + str(coords) + "}")),
         )
         self.client.publish(
             f"games/{self.lobby_name}/{self.player_name}/move",
