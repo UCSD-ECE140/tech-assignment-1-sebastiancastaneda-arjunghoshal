@@ -409,24 +409,28 @@ class AutoPlayerClient:
         self.client.publish(
             f"games/{self.lobby_name}/{self.team_name}/{self.player_name}/collected",
             str(coins),
+            qos=2,
         )
 
     def publish_coins(self, coins: list[list[list[int]]]):
         self.client.publish(
             f"games/{self.lobby_name}/{self.team_name}/{self.player_name}/seencoin",
             str(coins),
+            qos=2,
         )
 
     def publish_walls(self, wall: list[int]):
         self.client.publish(
             f"games/{self.lobby_name}/{self.team_name}/{self.player_name}/seenwall",
             str(wall),
+            qos=2,
         )
 
     def publish_seen(self, seen: list[int]):
         self.client.publish(
             f"games/{self.lobby_name}/{self.team_name}/{self.player_name}/seencoords",
             str(seen),
+            qos=2,
         )
 
     def handle_message(self, msg):
@@ -489,8 +493,11 @@ class AutoPlayerClient:
         self.client.publish(
             f"games/{self.lobby_name}/{self.team_name}/{self.player_name}/position",
             str(coords),
+            qos=2,
         )
-        self.client.publish(f"games/{self.lobby_name}/{self.player_name}/move", move)
+        self.client.publish(
+            f"games/{self.lobby_name}/{self.player_name}/move", move, qos=2
+        )
 
 
 if __name__ == "__main__":
