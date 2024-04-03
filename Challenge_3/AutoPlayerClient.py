@@ -105,8 +105,19 @@ class PlayerMap:
                     continue
                 self.seen_coords.append(curr_position)
 
+    def update_teammates(self, player_name, player_position):
+        if player_name not in self.teammate_names:
+            self.teammate_names.append(player_name)
+            self.teammates.append(player_position)
+            return
+        for i in range(len(self.teammates)):
+            if self.teammate_names[i] != player_name:
+                continue
+            self.teammates[i] = player_position
+
     def load_visible_map(self, game_state: dict):
         self.current_position = game_state["currentPosition"]
+        # TODO: change to get from topic
         self.teammates = game_state["teammatePositions"]
         self.teammate_names = game_state["teammateNames"]
         self.enemies = game_state["enemyPositions"]
@@ -158,6 +169,7 @@ class PlayerMap:
         visited = []
         best_score = 9999
         best_direction = choice(["UP", "DOWN", "LEFT", "RIGHT"])
+        next_coords = None
         curr_node = self.current_position
         for move, direction in moves:
             neighbor = [curr_node[0] + move[0], curr_node[1] + move[1]]
@@ -188,13 +200,23 @@ class PlayerMap:
                 if score < best_score:
                     best_score = score
                     best_direction = direction
+                    for move, dir in moves:
+                        if dir != best_direction:
+                            continue
+                        next_coords = [curr_node[0] + move[0], curr_node[1] + move[1]]
+                        break
             elif curr_node not in self.seen_coords:
                 score = path_len + 200
                 if score < best_score:
                     best_score = score
                     best_direction = direction
+                    for move, dir in moves:
+                        if dir != best_direction:
+                            continue
+                        next_coords = [curr_node[0] + move[0], curr_node[1] + move[1]]
+                        break
             visited.append(curr_node)
-        return best_direction
+        return best_direction, next_coords
 
 
 def eucliedan_distance(a: list[int], b: list[int]):
@@ -289,6 +311,7 @@ class AutoPlayerClient:
         self.client.subscribe(f"games/{self.lobby_name}/lobby")
         self.client.subscribe(f"games/{self.lobby_name}/{self.player_name}/game_state")
         self.client.subscribe(f"games/{self.lobby_name}/scores")
+        self.client.subscribe(f"games/{self.lobby_name}/{self.team_name}/+/position")
 
         self.map = PlayerMap(self.player_name, 10, 10)
         self.curr_score: int = 0
@@ -314,9 +337,17 @@ class AutoPlayerClient:
             game_state = json.loads(msg.payload.decode())
             self.map.load_visible_map(game_state)
             self.map.print_map()
-            self.move(self.map.next_move())
+            direction, next_coords = self.map.next_move()
+            self.move(direction, next_coords)
+        topic_list = msg.topic.split("/")
+        if topic_list[-1] == "position":
+            self.map.update_teammates(topic_list[3], msg.payload.decode())
 
-    def move(self, move: str):
+    def move(self, move: str, coords: list[int]):
+        self.client.publish(
+            f"games/{self.lobby_name}/{self.team_name}/{self.player_name}/position",
+            coords,
+        )
         self.client.publish(
             f"games/{self.lobby_name}/{self.player_name}/move",
             move,
