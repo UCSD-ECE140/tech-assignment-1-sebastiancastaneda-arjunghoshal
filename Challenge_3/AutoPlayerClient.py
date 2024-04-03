@@ -456,14 +456,17 @@ class AutoPlayerClient:
                     topic_list[3], json.loads(msg.payload.decode())
                 )
         if topic_list[-1] == "collected1":
-            if topic_list[3] != self.player_name:
-                self.map.coin1.remove(json.loads(msg.payload.decode()))
+            coin = json.loads(msg.payload.decode())
+            if topic_list[3] != self.player_name and coin in self.map.coin1:
+                self.map.coin1.remove(coin)
         if topic_list[-1] == "collected2":
-            if topic_list[3] != self.player_name:
-                self.map.coin2.remove(json.loads(msg.payload.decode()))
+            coin = json.loads(msg.payload.decode())
+            if topic_list[3] != self.player_name and coin in self.map.coin2:
+                self.map.coin2.remove(coin)
         if topic_list[-1] == "collected3":
-            if topic_list[3] != self.player_name:
-                self.map.coin3.remove(json.loads(msg.payload.decode()))
+            coin = json.loads(msg.payload.decode())
+            if topic_list[3] != self.player_name and coin in self.map.coin3:
+                self.map.coin3.remove(coin)
         if topic_list[-1] == "seencoin1":
             coin = json.loads(msg.payload.decode())
             if topic_list[3] != self.player_name and coin not in self.map.coin1:
