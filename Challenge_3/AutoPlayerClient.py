@@ -8,6 +8,147 @@ import time
 from sys import argv
 from keyboard import read_event
 from random import choice
+from math import sqrt
+
+
+class PlayerMap:
+    def __init__(self, player_name: str, rows: int, columns: int) -> None:
+        self.player_name: str = player_name
+        self.rows = rows
+        self.columns = columns
+        self.seen_coords: list[list[int]] = []
+        self.current_position: list[int] = None
+        self.teammates: list[list[int]] = []
+        self.teammate_names: list[str] = []
+        self.enemies: list[list[int]] = []
+        self.walls: list[list[int]] = []
+        self.coin1: list[list[int]] = []
+        self.coin2: list[list[int]] = []
+        self.coin3: list[list[int]] = []
+        for i in range(columns + 2):
+            self.walls.append([-1, i])
+            self.walls.append([rows, i])
+        for i in range(rows + 2):
+            self.walls.append([i, -1])
+            self.walls.append([i, columns])
+        self.map: list[list[int]] = [
+            [0 for i in range(self.rows)] for j in range(self.columns)
+        ]
+
+    def print_map(self):
+        display_map: list[list[str]] = [
+            ["None" for i in range(self.rows)] for j in range(self.columns)
+        ]
+        display_map[self.current_position[0]][
+            self.current_position[1]
+        ] = self.player_name
+        for i, teammate in enumerate(self.teammates):
+            display_map[teammate[0]][teammate[1]] = self.teammate_names[i]
+        for enemy in self.enemies:
+            display_map[enemy[0]][enemy[1]] = "Enemy"
+        for wall in self.walls:
+            if wall[0] < 0 or wall[0] == self.rows:
+                continue
+            if wall[1] < 0 or wall[1] == self.columns:
+                continue
+            display_map[wall[0]][wall[1]] = "Wall"
+        for coin in self.coin1:
+            display_map[coin[0]][coin[1]] = "Coin1"
+        for coin in self.coin2:
+            display_map[coin[0]][coin[1]] = "Coin2"
+        for coin in self.coin3:
+            display_map[coin[0]][coin[1]] = "Coin3"
+
+        output = []
+        for row in display_map:
+            row_str = []
+            for cell in row:
+                row_str.append(str(cell))
+            output.append("\t".join(row_str))
+        output = "\n".join(output)
+        print(output)
+
+    def remove_collected_coins(self):
+        if self.current_position in self.coin1:
+            self.coin1.remove(self.current_position)
+        if self.current_position in self.coin2:
+            self.coin2.remove(self.current_position)
+        if self.current_position in self.coin3:
+            self.coin3.remove(self.current_position)
+        for teammate in self.teammates:
+            if teammate in self.coin1:
+                self.coin1.remove(teammate)
+            if teammate in self.coin2:
+                self.coin2.remove(teammate)
+            if teammate in self.coin3:
+                self.coin3.remove(teammate)
+        for enemy in self.enemies:
+            if enemy in self.coin1:
+                self.coin1.remove(enemy)
+            if enemy in self.coin2:
+                self.coin2.remove(enemy)
+            if enemy in self.coin3:
+                self.coin3.remove(enemy)
+
+    def update_seen_coords(self):
+        for i in range(-2, 3):
+            for j in range(-2, 3):
+                curr_position = [
+                    self.current_position[0] + i,
+                    self.current_position[1] + j,
+                ]
+                if curr_position[0] < 0 or curr_position[0] == self.rows:
+                    continue
+                if curr_position[1] < 0 or curr_position[1] == self.columns:
+                    continue
+                if curr_position in self.seen_coords:
+                    continue
+                self.seen_coords.append(curr_position)
+
+    def load_visible_map(self, game_state: dict):
+        self.current_position = game_state["currentPosition"]
+        self.teammates = game_state["teammatePositions"]
+        self.teammate_names = game_state["teammateNames"]
+        self.enemies = game_state["enemyPositions"]
+        self.remove_collected_coins()
+        self.update_seen_coords()
+        for coin in game_state["coin1"]:
+            if coin in self.coin1:
+                continue
+            self.coin1.append(coin)
+        for coin in game_state["coin2"]:
+            if coin in self.coin2:
+                continue
+            self.coin2.append(coin)
+        for coin in game_state["coin3"]:
+            if coin in self.coin3:
+                continue
+            self.coin3.append(coin)
+        for wall in game_state["walls"]:
+            if wall in self.walls:
+                continue
+            self.walls.append(wall)
+        self.map = [[0 for i in range(self.rows)] for j in range(self.columns)]
+        for teammate in self.teammates:
+            self.map[teammate[0]][teammate[1]] = -1
+        for enemy in self.enemies:
+            self.map[enemy[0]][enemy[1]] = -1
+        for wall in self.walls:
+            if wall[0] < 0 or wall[0] == self.rows:
+                continue
+            if wall[1] < 0 or wall[1] == self.columns:
+                continue
+            self.map[wall[0]][wall[1]] = -1
+        for coin in self.coin1:
+            self.map[coin[0]][coin[1]] = 1
+        for coin in self.coin2:
+            self.map[coin[0]][coin[1]] = 2
+        for coin in self.coin3:
+            self.map[coin[0]][coin[1]] = 3
+
+
+def eucliedan_distance(a: list[int], b: list[int]):
+    return sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2)
 
 
 # setting callbacks for different events to see if it works, print the message etc.
@@ -100,19 +241,8 @@ class AutoPlayerClient:
         self.client.subscribe(f"games/{self.lobby_name}/scores")
 
         self.ended = False
-        self.wall_map = [[False for i in range(12)] for j in range(12)]
-        self.coin_map = [[0 for i in range(10)] for j in range(10)]
-        self.curr_pos: list[int] = [0, 0]
+        self.map = PlayerMap(self.player_name, 10, 10)
         self.curr_score: int = 0
-        self.visible_map: list[list[int]] = [[0 for i in range(5)] for j in range(5)]
-        self.visible_map[2][2] = -1
-
-        self.wall_map[0][:] = [True for i in range(len(self.wall_map[0]))]
-        for i in range(len(self.wall_map)):
-            self.wall_map[i][0] = True
-        for i in range(len(self.wall_map)):
-            self.wall_map[i][-1] = True
-        self.wall_map[-1][:] = [True for i in range(len(self.wall_map[0]))]
 
         self.client.publish(
             "new_game",
@@ -135,115 +265,65 @@ class AutoPlayerClient:
             exit(0)
         if msg.topic == f"games/{self.lobby_name}/{self.player_name}/game_state":
             game_state = json.loads(msg.payload.decode())
-            self.load_visible_map(game_state)
-            self.print_map(game_state)
+            self.map.load_visible_map(game_state)
+            self.map.print_map()
             self.next_move()
-        if msg.topic == f"games/{self.lobby_name}/scores":
-            scores = json.loads(msg.payload.decode())
-            if scores[self.team_name] != self.curr_score:
-                if (
-                    self.coin_map[self.curr_pos]
-                    == scores[self.team_name] - self.curr_score
-                ):
-                    self.coin_map[self.curr_pos] = 0
-                self.curr_score = scores[self.team_name]
 
-    def print_map(self, game_state: dict):
-        curr_pos = game_state["currentPosition"]
-        teammate_pos: list[list[int]] = game_state["teammatePositions"]
-        teammate_names: list[str] = game_state["teammateNames"]
-        enemy_pos: list[list[int]] = game_state["enemyPositions"]
-        coin1: list[list[int]] = game_state["coin1"]
-        coin2: list[list[int]] = game_state["coin2"]
-        coin3: list[list[int]] = game_state["coin3"]
-        walls: list[list[int]] = game_state["walls"]
-        visible_map = [[None for i in range(5)] for j in range(5)]
-
-        visible_map[2][2] = self.player_name
-        for i in range(len(teammate_pos)):
-            visible_map[4 - (curr_pos[0] - teammate_pos[i][0] + 2)][
-                teammate_pos[i][1] - curr_pos[1] + 2
-            ] = teammate_names[i]
-        for i in range(len(enemy_pos)):
-            visible_map[4 - (curr_pos[0] - enemy_pos[i][0] + 2)][
-                enemy_pos[i][1] - curr_pos[1] + 2
-            ] = "Enemy"
-        for i in range(len(coin1)):
-            visible_map[4 - (curr_pos[0] - coin1[i][0] + 2)][
-                coin1[i][1] - curr_pos[1] + 2
-            ] = "Coin1"
-        for i in range(len(coin2)):
-            visible_map[4 - (curr_pos[0] - coin2[i][0] + 2)][
-                coin2[i][1] - curr_pos[1] + 2
-            ] = "Coin2"
-        for i in range(len(coin3)):
-            visible_map[4 - (curr_pos[0] - coin3[i][0] + 2)][
-                coin3[i][1] - curr_pos[1] + 2
-            ] = "Coin3"
-        for i in range(len(walls)):
-            visible_map[4 - (curr_pos[0] - walls[i][0] + 2)][
-                walls[i][1] - curr_pos[1] + 2
-            ] = "Wall"
-
-        output = []
-        for row in visible_map:
-            row_str = []
-            for cell in row:
-                row_str.append(str(cell))
-            output.append("\t".join(row_str))
-        output = "\n".join(output)
-        print(output)
-
-    def print_wall_map(self):
-        for row in self.wall_map:
-            print(row)
-
-    def print_coin_map(self):
-        for row in self.coin_map:
-            print(row)
-
-    def load_visible_map(self, game_state: dict):
-        self.curr_pos = game_state["currentPosition"]
-        teammate_pos: list[list[int]] = game_state["teammatePositions"]
-        enemy_pos: list[list[int]] = game_state["enemyPositions"]
-        coin1: list[list[int]] = game_state["coin1"]
-        coin2: list[list[int]] = game_state["coin2"]
-        coin3: list[list[int]] = game_state["coin3"]
-        walls: list[list[int]] = game_state["walls"]
-        self.visible_map = [[0 for i in range(5)] for j in range(5)]
-        self.visible_map[2][2] = -1
-
-        for i in range(len(teammate_pos)):
-            self.visible_map[4 - (self.curr_pos[0] - teammate_pos[i][0] + 2)][
-                teammate_pos[i][1] - self.curr_pos[1] + 2
-            ] = -1
-        for i in range(len(enemy_pos)):
-            self.visible_map[4 - (self.curr_pos[0] - enemy_pos[i][0] + 2)][
-                enemy_pos[i][1] - self.curr_pos[1] + 2
-            ] = -1
-        for i in range(len(coin1)):
-            self.coin_map[coin1[i][0]][coin1[i][1]] = 1
-            self.visible_map[4 - (self.curr_pos[0] - coin1[i][0] + 2)][
-                coin1[i][1] - self.curr_pos[1] + 2
-            ] = 1
-        for i in range(len(coin2)):
-            self.coin_map[coin2[i][0]][coin2[i][1]] = 2
-            self.visible_map[4 - (self.curr_pos[0] - coin2[i][0] + 2)][
-                coin2[i][1] - self.curr_pos[1] + 2
-            ] = 2
-        for i in range(len(coin3)):
-            self.coin_map[coin3[i][0]][coin3[i][1]] = 3
-            self.visible_map[4 - (self.curr_pos[0] - coin3[i][0] + 2)][
-                coin3[i][1] - self.curr_pos[1] + 2
-            ] = 3
-        for i in range(len(walls)):
-            self.wall_map[walls[i][0] + 1][walls[i][1] + 1] = True
-            self.visible_map[4 - (self.curr_pos[0] - walls[i][0] + 2)][
-                walls[i][1] - self.curr_pos[1] + 2
-            ] = -1
+    def move(self, move: str):
+        self.client.publish(
+            f"games/{self.lobby_name}/{self.player_name}/move",
+            move,
+        )
 
     def next_move(self):
-        pass
+        # perform bfs on the entire known map
+        moves = [
+            ([0, -1], "LEFT"),
+            ([0, 1], "RIGHT"),
+            ([-1, 0], "UP"),
+            ([1, 0], "DOWN"),
+        ]
+        queue = []
+        visited = []
+        best_score = 9999
+        best_direction = choice(["UP", "DOWN", "LEFT", "RIGHT"])
+        curr_node = self.map.current_position
+        for move, direction in moves:
+            neighbor = [curr_node[0] + move[0], curr_node[1] + move[1]]
+            if neighbor in visited:
+                continue
+            if neighbor[0] < 0 or neighbor[0] == self.map.rows:
+                continue
+            if neighbor[1] < 0 or neighbor[1] == self.map.columns:
+                continue
+            if self.map.map[neighbor[0]][neighbor[1]] == -1:
+                continue
+            queue.append((neighbor, direction, 1))
+        while len(queue) > 0:
+            curr_node, direction, path_len = queue.pop(0)
+            for move, _ in moves:
+                neighbor = [curr_node[0] + move[0], curr_node[1] + move[1]]
+                if neighbor in visited:
+                    continue
+                if neighbor[0] < 0 or neighbor[0] == self.map.rows:
+                    continue
+                if neighbor[1] < 0 or neighbor[1] == self.map.columns:
+                    continue
+                if self.map.map[neighbor[0]][neighbor[1]] == -1:
+                    continue
+                queue.append((neighbor, direction, path_len + 1))
+            if self.map.map[curr_node[0]][curr_node[1]] > 0:
+                score = path_len / self.map.map[curr_node[0]][curr_node[1]]
+                if score < best_score:
+                    best_score = score
+                    best_direction = direction
+            elif curr_node not in self.map.seen_coords:
+                score = path_len + 200
+                if score < best_score:
+                    best_score = score
+                    best_direction = direction
+            visited.append(curr_node)
+        self.move(best_direction)
 
 
 if __name__ == "__main__":
@@ -280,8 +360,4 @@ if __name__ == "__main__":
                     f"games/{player_client.lobby_name}/{player_client.player_name}/move",
                     "RIGHT",
                 )
-            case "w":
-                player_client.print_wall_map()
-            case "c":
-                player_client.print_coin_map()
     player_client.client.loop_stop()
