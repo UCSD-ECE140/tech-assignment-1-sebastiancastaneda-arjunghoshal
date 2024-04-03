@@ -348,7 +348,7 @@ class AutoPlayerClient:
     def move(self, move: str, coords: list[int]):
         self.client.publish(
             f"games/{self.lobby_name}/{self.team_name}/{self.player_name}/position",
-            str(json.loads("{teammate: " + str(coords) + "}")),
+            str(json.loads('{"teammate": ' + str(coords) + "}")),
         )
         self.client.publish(
             f"games/{self.lobby_name}/{self.player_name}/move",
