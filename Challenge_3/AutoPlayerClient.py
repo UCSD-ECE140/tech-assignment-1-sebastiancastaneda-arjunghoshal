@@ -493,7 +493,7 @@ if __name__ == "__main__":
     player_client = AutoPlayerClient()
     player_client.client.loop_start()
     while True:
-        key_event = read_event()
+        key_event = read_event(suppress=True)
         if key_event.event_type == "up":
             continue
         match key_event.name:
