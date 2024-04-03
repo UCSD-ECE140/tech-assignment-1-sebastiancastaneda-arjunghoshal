@@ -231,8 +231,12 @@ class PlayerMap:
         queue = []
         visited = []
         best_score = 9999
-        best_direction = choice(["UP", "DOWN", "LEFT", "RIGHT"])
-        next_coords = None
+        init_choice = choice(moves)
+        best_direction = init_choice[1]
+        next_coords = [
+            self.current_position[0] + init_choice[0][0],
+            self.current_position[1] + init_choice[0][1],
+        ]
         curr_node = self.current_position
         for move, direction in moves:
             neighbor = [curr_node[0] + move[0], curr_node[1] + move[1]]
@@ -493,7 +497,7 @@ if __name__ == "__main__":
     player_client = AutoPlayerClient()
     player_client.client.loop_start()
     while True:
-        key_event = read_event(suppress=True)
+        key_event = read_event()
         if key_event.event_type == "up":
             continue
         match key_event.name:
