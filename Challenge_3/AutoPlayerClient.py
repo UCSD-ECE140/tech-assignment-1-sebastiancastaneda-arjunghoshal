@@ -10,9 +10,13 @@ from keyboard import read_event
 from random import choice
 from math import sqrt
 
+CURSOR_UP_ONE = "\x1b[1A"
+ERASE_LINE = "\x1b[2K"
+
 
 class PlayerMap:
     def __init__(self, observer, player_name: str, rows: int, columns: int) -> None:
+        self.initializing = True
         self.observer = observer
         self.player_name: str = player_name
         self.rows = rows
@@ -26,6 +30,7 @@ class PlayerMap:
         self.coin1: list[list[int]] = []
         self.coin2: list[list[int]] = []
         self.coin3: list[list[int]] = []
+        self.score = 0
         for i in range(columns + 2):
             self.walls.append([-1, i])
             self.walls.append([rows, i])
@@ -66,8 +71,11 @@ class PlayerMap:
             for cell in row:
                 row_str.append(str(cell))
             output.append("\t".join(row_str))
+            if not self.initializing:
+                print(CURSOR_UP_ONE + ERASE_LINE + CURSOR_UP_ONE)
         output = "\n".join(output)
         print(output)
+        self.initializing = False
 
     def remove_collected_coins(self, game_state: dict):
         coins = [[], [], []]
@@ -343,7 +351,7 @@ def on_message(client, userdata, msg):
     :param msg: the message with topic and payload
     """
     global player_client
-    print("message: " + msg.topic + " " + str(msg.qos) + " " + str(msg.payload))
+    # print("message: " + msg.topic + " " + str(msg.qos) + " " + str(msg.payload))
     player_client.handle_message(msg)
 
 
@@ -362,7 +370,7 @@ class AutoPlayerClient:
         broker_port = int(os.environ.get("BROKER_PORT"))
         username = os.environ.get("USER_NAME")
         password = os.environ.get("PASSWORD")
-
+        self.ended = False
         self.client = paho.Client(
             client_id=self.player_name, userdata=None, protocol=paho.MQTTv5
         )
@@ -374,13 +382,13 @@ class AutoPlayerClient:
         self.client.connect(broker_address, broker_port)
 
         # setting callbacks, use separate functions like above for better visibility
-        self.client.on_subscribe = (
-            on_subscribe  # Can comment out to not print when subscribing to new topics
-        )
+        # self.client.on_subscribe = (
+        #     on_subscribe  # Can comment out to not print when subscribing to new topics
+        # )
         self.client.on_message = on_message
-        self.client.on_publish = (
-            on_publish  # Can comment out to not print when publishing to topics
-        )
+        # self.client.on_publish = (
+        #     on_publish  # Can comment out to not print when publishing to topics
+        # )
         self.client.subscribe(f"games/{self.lobby_name}/lobby")
         self.client.subscribe(f"games/{self.lobby_name}/{self.player_name}/game_state")
         self.client.subscribe(f"games/{self.lobby_name}/scores")
@@ -435,8 +443,11 @@ class AutoPlayerClient:
 
     def handle_message(self, msg):
         if "Error" in msg.payload.decode():
+            self.ended = True
             exit(1)
         if "Game Over" in msg.payload.decode():
+            self.ended = True
+            print(f"Game over\nScore: {self.map.score}")
             exit(0)
         if msg.topic == f"games/{self.lobby_name}/{self.player_name}/game_state":
             game_state = json.loads(msg.payload.decode())
@@ -445,6 +456,9 @@ class AutoPlayerClient:
             direction, next_coords = self.map.next_move()
             self.move(direction, next_coords)
         topic_list = msg.topic.split("/")
+        if topic_list[-1] == "scores":
+            scores = json.loads(msg.payload.decode())
+            self.map.score = scores[self.team_name]
         if topic_list[-1] == "position":
             if topic_list[3] != self.player_name:
                 self.map.update_teammates(
@@ -504,7 +518,9 @@ if __name__ == "__main__":
     player_client = AutoPlayerClient()
     player_client.client.loop_start()
     while True:
-        key_event = read_event()
+        if player_client.ended:
+            break
+        key_event = read_event(suppress=True)
         if key_event.event_type == "up":
             continue
         match key_event.name:
@@ -513,26 +529,6 @@ if __name__ == "__main__":
                     f"games/{player_client.lobby_name}/start", "STOP"
                 )
                 break
-            case "up":
-                player_client.client.publish(
-                    f"games/{player_client.lobby_name}/{player_client.player_name}/move",
-                    "UP",
-                )
-            case "down":
-                player_client.client.publish(
-                    f"games/{player_client.lobby_name}/{player_client.player_name}/move",
-                    "DOWN",
-                )
-            case "left":
-                player_client.client.publish(
-                    f"games/{player_client.lobby_name}/{player_client.player_name}/move",
-                    "LEFT",
-                )
-            case "right":
-                player_client.client.publish(
-                    f"games/{player_client.lobby_name}/{player_client.player_name}/move",
-                    "RIGHT",
-                )
             case "s":
                 player_client.client.publish(
                     f"games/{player_client.lobby_name}/start", "START"
