@@ -362,6 +362,7 @@ class AutoPlayerClient:
                 "Usage: python PlayerClient.py <player_name> <lobby_name> <team_name>"
             )
             exit(1)
+        self.can_start = False
         self.player_name = argv[1]
         self.lobby_name = argv[2]
         self.team_name = argv[3]
@@ -397,6 +398,7 @@ class AutoPlayerClient:
         self.client.subscribe(f"games/{self.lobby_name}/{self.team_name}/+/seencoin")
         self.client.subscribe(f"games/{self.lobby_name}/{self.team_name}/+/seenwall")
         self.client.subscribe(f"games/{self.lobby_name}/{self.team_name}/+/seencoords")
+        self.client.subscribe(f"games/{self.lobby_name}/canstart")
 
         self.map = PlayerMap(self, self.player_name, 10, 10)
         self.curr_score: int = 0
@@ -502,6 +504,9 @@ class AutoPlayerClient:
                     if coord in self.map.seen_coords:
                         continue
                     self.map.seen_coords.append(coord)
+        if topic_list[-1] == "canstart":
+            print("New lobby created, you may start the game by pressing s")
+            self.can_start = True
 
     def move(self, move: str, coords: list[int]):
         self.client.publish(
@@ -520,7 +525,7 @@ if __name__ == "__main__":
     while True:
         if player_client.ended:
             break
-        key_event = read_event(suppress=True)
+        key_event = read_event()
         if key_event.event_type == "up":
             continue
         match key_event.name:
@@ -530,7 +535,9 @@ if __name__ == "__main__":
                 )
                 break
             case "s":
-                player_client.client.publish(
-                    f"games/{player_client.lobby_name}/start", "START"
-                )
+                if player_client.can_start:
+                    print("Starting game!")
+                    player_client.client.publish(
+                        f"games/{player_client.lobby_name}/start", "START"
+                    )
     player_client.client.loop_stop()

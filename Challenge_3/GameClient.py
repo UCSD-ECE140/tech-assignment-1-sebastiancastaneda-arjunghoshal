@@ -79,6 +79,7 @@ def add_player(client, topic_list, msg_payload):
     if player.lobby_name not in client.team_dict.keys():
         client.team_dict[player.lobby_name] = {}
         client.team_dict[player.lobby_name]["started"] = False
+        client.publish(f"games/{player.lobby_name}/canstart", "")
 
     if client.team_dict[player.lobby_name]["started"]:
         publish_error_to_lobby(
